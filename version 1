@@ -1,0 +1,342 @@
+//version one
+//upright line pieces randomly fall
+//stop when they hit bottom or another piece
+//when bottom row culls, game board moves down 1 row at a time
+
+//main file
+#include<iostream>
+using namespace std;
+#include <allegro5\allegro.h>
+#include<allegro5\allegro_primitives.h>
+#include<allegro5\allegro_image.h>
+#include<vector>
+#include"line.h"
+
+const int SCREEN_WIDTH = 500;
+const int SCREEN_HEIGHT = 800;
+const int FPS = 60;
+
+bool cullGrid();
+
+int grid[10][16] = {
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0
+
+};
+
+enum MYKEYS {
+	KEY_LEFT, KEY_RIGHT, KEY_SPACE
+};
+
+int main() {
+	al_init();
+	al_init_primitives_addon();
+	al_init_image_addon();
+	al_install_keyboard();
+	al_init_primitives_addon();
+
+	srand(time(NULL));
+
+	ALLEGRO_TIMER *timer = al_create_timer(1.0 / FPS);
+	ALLEGRO_DISPLAY *display = al_create_display(SCREEN_WIDTH, SCREEN_HEIGHT);
+	ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
+	bool doexit = false;
+	int ticker = 0;
+	bool key[3] = { false, false, false };
+	bool redraw = true;
+	bool ActivePiece = false;
+
+	vector<line *> pieces;
+	vector<line *>::iterator iter;
+
+	//allegro start up stuff
+	{
+		al_set_target_bitmap(al_get_backbuffer(display));
+
+		al_register_event_source(event_queue, al_get_display_event_source(display));
+
+		al_register_event_source(event_queue, al_get_timer_event_source(timer));
+
+		al_register_event_source(event_queue, al_get_keyboard_event_source());
+
+		al_clear_to_color(al_map_rgb(0, 0, 0));
+
+		al_flip_display();
+
+		al_start_timer(timer);
+	}
+
+	while (!doexit) {
+	
+		//cout << "game loop" << endl;
+		ALLEGRO_EVENT ev;
+		al_wait_for_event(event_queue, &ev);
+
+		//timer section//////////////////////////////////////////////////////////////////////////////////
+		if (ev.type == ALLEGRO_EVENT_TIMER) {
+			ticker++;
+			cout << "ticker is " << ticker << endl;
+			//cull the grid
+			if(ticker>50)
+				if (cullGrid() == true) 
+				ticker = 0;
+				
+
+			
+
+
+			//create new piece
+			if (ActivePiece == false && ticker > 50) {
+				line *newline = new line((rand() % 10) * 50, 0);
+				//cout << "pushing in new piece";
+				pieces.push_back(newline);
+				ActivePiece = true;
+			}
+
+			//check if a piece has hit the bottom
+			for (iter = pieces.begin(); iter != pieces.end(); iter++) {
+				if ((*iter)->getY() + 50 * 4 > SCREEN_HEIGHT) {
+					(*iter)->land(grid);
+					ActivePiece = false;
+					iter = pieces.erase(iter); //erase the piece from the vector when it lands (this breaks code)
+					break; //this fixed it :)
+				}
+
+			}
+
+			//check if a piece has hit the top of another piece
+			for (iter = pieces.begin(); iter != pieces.end(); iter++) {
+				if (grid[((*iter)->getX()) / 50][(((*iter)->getY()) + 200) / 50] == 10) {
+					(*iter)->land(grid);
+					ActivePiece = false;
+					iter = pieces.erase(iter);//erase the piece from the vector when it lands (this breaks code)
+					break; //this fixed it
+				}
+
+			}
+
+			//move pieces if they haven't hit bottom
+			for (iter = pieces.begin(); iter != pieces.end(); iter++) {
+				if (!(*iter)->isLanded())
+					(*iter)->move();
+
+			}
+
+		
+
+			//wipe map
+			for (int i = 0; i < 10; i++) {
+				for (int j = 0; j < 16; j++) {
+					if(grid[i][j] == 1)
+						grid[i][j]=0;
+				}
+			}
+			redraw = true;
+		}//end timer section
+		 //input section//////////////////////////////////////////////////////////////////
+		else if (ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
+			break;
+		}
+		else if (ev.type == ALLEGRO_EVENT_KEY_DOWN) {
+			switch (ev.keyboard.keycode) {
+
+
+			case ALLEGRO_KEY_LEFT:
+				key[KEY_LEFT] = true;
+				break;
+
+			case ALLEGRO_KEY_RIGHT:
+				key[KEY_RIGHT] = true;
+				break;
+			case ALLEGRO_KEY_SPACE:
+				key[KEY_SPACE] = true;
+				break;
+			}
+		}
+		else if (ev.type == ALLEGRO_EVENT_KEY_UP) {
+			switch (ev.keyboard.keycode) {
+
+
+			case ALLEGRO_KEY_LEFT:
+				key[KEY_LEFT] = false;
+				break;
+
+			case ALLEGRO_KEY_RIGHT:
+				key[KEY_RIGHT] = false;
+				break;
+
+			case ALLEGRO_KEY_SPACE:
+				key[KEY_SPACE] = false;
+				break;
+
+			case ALLEGRO_KEY_ESCAPE:
+				doexit = true;
+				break;
+			}
+		}
+
+		//render section///////////////////////////////////////////
+		if (redraw && al_is_event_queue_empty(event_queue)) {
+			redraw = false;
+			al_clear_to_color(al_map_rgb(0, 0, 0));
+		
+			//draw pieces
+			for (iter = pieces.begin(); iter != pieces.end(); iter++) {
+					(*iter)->draw(grid);
+			}
+
+			for (int i = 0; i < 10; i++) {
+				for (int j = 0; j < 16; j++) {
+					if (grid[i][j] == 0)//draws grid lines
+						al_draw_rectangle(i * 50, j * 50, i * 50 + 50, j * 50 + 50, al_map_rgb(255, 255, 255), 2);
+					if (grid[i][j] == 1) {//draws active pieces
+						al_draw_filled_rectangle(i * 50, j * 50, i * 50 + 50, j * 50 + 50, al_map_rgb(255, 50, 55));
+						al_draw_rectangle(i * 50, j * 50, i * 50 + 50, j * 50 + 50, al_map_rgb(25, 50, 55),4);
+					}
+					if (grid[i][j] == 10) {//draws inactive pieces
+						al_draw_filled_rectangle(i * 50, j * 50, i * 50 + 50, j * 50 + 50, al_map_rgb(255, 50, 55));
+						al_draw_rectangle(i * 50, j * 50, i * 50 + 50, j * 50 + 50, al_map_rgb(25, 50, 55), 4);
+
+					}
+				}
+			}
+
+			al_flip_display();
+		}//end render
+	}//end game loop
+
+	//al_rest(3);
+	al_destroy_display(display);
+
+}
+
+
+bool cullGrid() {
+
+	int bottomRowCount = 0;
+	//count the number of filled squares in bottom row
+	for (int i = 0; i < 10; i++) {
+		if (grid[i][15] == 10)
+			bottomRowCount++;
+	}
+	//if 10 out of 10 squares are filled, move the whole matrix down a row
+	if (bottomRowCount == 10) {
+		//cout << "culling bottom row!" << endl;
+		//system("pause");
+		for(int i = 0; i<10; i++)
+			for (int j = 14; j >=0; j--) { //start from the bottom up so we don't erase data
+				grid[i][j+1] = grid[i][j];//replaces a row with whatever is above it
+				}
+		return true;
+	
+
+	}
+	return false;
+
+}
+
+
+
+//line.h
+#pragma once
+
+class line {
+private:
+	int x;
+	int y;
+	int spin;
+	bool landed;
+
+
+public:
+	line();
+	line(int xpos, int ypos);
+	void move();
+	void turn(char dir);
+	bool isLanded();
+	void draw(int map[10][16]);
+	int getX();
+	int getY();
+	void land(int map[10][16]);
+};
+
+//line.cpp
+#include"line.h"
+#include<allegro5\allegro_primitives.h>
+
+line::line() {
+	x = 0;
+	y = 0;
+	spin = 1;
+	landed = false;
+}
+
+line::line(int xpos, int ypos) {
+	x = xpos;
+	y = ypos;
+	landed = false;
+	spin = 1;
+}
+
+void line::move() {
+
+	y+=8;
+
+}
+
+void line::turn(char dir) {
+
+	spin *= -1;
+
+}
+bool line::isLanded() {
+
+	return landed;
+
+}
+
+void line::draw(int map[10][16]) {
+
+	//turn these on for smoother motion
+	//al_draw_filled_rectangle(x, y, x + 50, y + 50 * 4, al_map_rgb(100, 100, 200));
+	//al_draw_rectangle(x, y, x + 50, y + 50 * 4, al_map_rgb(100, 200, 200),5);
+
+	if (spin == 1) {
+		map[x / 50][y / 50] = 1;
+		map[x / 50][(y +50)/ 50] = 1;
+		map[x / 50][(y+ 100 )/ 50] = 1;
+		map[x / 50][(y + 150) / 50] = 1;
+	}
+}
+
+int line::getY() {
+	return y;
+}
+int line::getX() {
+	return x;
+}
+
+void line::land(int map[10][16]) {
+
+	landed = true;
+	if (spin == 1) {
+		map[x / 50][y / 50] = 10;
+		map[x / 50][(y + 50) / 50] = 10;
+		map[x / 50][(y + 100) / 50] = 10;
+		map[x / 50][(y + 150) / 50] = 10;
+	}
+}
